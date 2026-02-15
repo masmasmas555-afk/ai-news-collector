@@ -1,0 +1,44 @@
+name: Daily AI News
+
+on:
+  schedule:
+    # 22:00 UTC = 07:00 JST (Standard Time)
+    - cron: '0 22 * * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  news-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run News Collector
+        run: |
+          python src/main.py
+
+      - name: Read Report
+        id: read_report
+        run: |
+          echo "BODY<<EOF" >> $GITHUB_ENV
+          cat daily_report.md >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Create Issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: "🤖 今日のAIニュース ($(date +'%Y-%m-%d'))"
+        run: |
+          gh issue create --title "$TITLE" --body "$BODY"

@@ -1,0 +1,5 @@
+__pycache__/
+*.py[cod]
+daily_report.md
+.vscode/
+.idea/
