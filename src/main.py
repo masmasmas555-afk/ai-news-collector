@@ -2,6 +2,7 @@ import requests
 import datetime
 import os
 from deep_translator import GoogleTranslator
+from bs4 import BeautifulSoup
 
 # Configuration
 HN_API_BASE = "https://hacker-news.firebaseio.com/v0"
@@ -46,18 +47,56 @@ def filter_stories(stories):
             filtered.append(story)
     return filtered
 
-def translate_titles(stories):
-    """Translates the titles of the filtered stories to Japanese."""
-    print("Translating titles...")
+def fetch_article_summary(url, max_length=500):
+    """Fetches the article content and returns a summary."""
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.content, 'lxml')
+            paragraphs = soup.find_all('p')
+            text_parts = [p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)]
+            full_text = ' '.join(text_parts)
+            if len(full_text) > max_length:
+                return full_text[:max_length] + "..."
+            elif full_text:
+                return full_text
+    except Exception as e:
+        print(f"Error fetching article summary from {url}: {e}")
+    return ""
+
+def translate_stories(stories):
+    """Translates the titles and summaries of the filtered stories to Japanese."""
+    print("Translating titles and summaries...")
     translator = GoogleTranslator(source='auto', target='ja')
     for story in stories:
+        # Translate title
         try:
             original_title = story.get('title', '')
-            translated = translator.translate(original_title)
-            story['title_ja'] = translated
+            if original_title:
+                translated_title = translator.translate(original_title)
+                story['title_ja'] = translated_title
+            else:
+                story['title_ja'] = ''
         except Exception as e:
-            print(f"Error translating {story.get('id')}: {e}")
+            print(f"Error translating title {story.get('id')}: {e}")
             story['title_ja'] = story.get('title', '') # Fallback
+
+        # Fetch and translate summary
+        url = story.get('url', '')
+        if url:
+            summary = fetch_article_summary(url)
+            if summary:
+                try:
+                    translated_summary = translator.translate(summary)
+                    story['summary_ja'] = translated_summary
+                except Exception as e:
+                    print(f"Error translating summary {story.get('id')}: {e}")
+                    story['summary_ja'] = ''
+            else:
+                story['summary_ja'] = ''
+        else:
+            story['summary_ja'] = ''
     return stories
 
 def generate_report(stories):
@@ -74,9 +113,12 @@ def generate_report(stories):
         title_ja = story.get('title_ja', title)
         url = story.get('url', f"https://news.ycombinator.com/item?id={story.get('id')}")
         score = story.get('score', 0)
+        summary_ja = story.get('summary_ja', '')
         
         report += f"### {title_ja}\n"
         report += f"- **英語タイトル**: {title}\n"
+        if summary_ja:
+            report += f"- **要約**: {summary_ja}\n"
         report += f"- **Score**: {score}\n"
         report += f"- [記事を読む]({url})\n\n"
         
@@ -91,7 +133,7 @@ def main():
     print(f"Found {len(ai_stories)} AI-related stories out of {len(stories)} scanned.")
 
     # 3. Translate
-    translated_stories = translate_titles(ai_stories)
+    translated_stories = translate_stories(ai_stories)
 
     # 4. Report
     report = generate_report(translated_stories)
