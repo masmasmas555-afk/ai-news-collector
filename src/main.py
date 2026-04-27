@@ -1,3 +1,4 @@
+import re
 import requests
 import datetime
 import os
@@ -34,16 +35,15 @@ def get_top_stories(limit=100):
             print(f"Error fetching story {sid}: {e}")
     return stories
 
+KEYWORD_PATTERNS = [re.compile(r'\b' + re.escape(k) + r'\b', re.IGNORECASE) for k in KEYWORDS]
+
 def filter_stories(stories):
     """Filters stories based on keywords in the title."""
     filtered = []
     print("Filtering stories...")
     for story in stories:
         title = story.get('title', '')
-        url = story.get('url', '')
-        
-        # Check if any keyword corresponds
-        if any(k.lower() in title.lower() for k in KEYWORDS):
+        if any(p.search(title) for p in KEYWORD_PATTERNS):
             filtered.append(story)
     return filtered
 
